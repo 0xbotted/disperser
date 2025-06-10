@@ -9,6 +9,18 @@ interface IERC20 {
     ) external returns (bool);
 }
 
+interface IERC20Permit {
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
+}
+
 contract Disperser {
     string public constant NATIVE_TOKEN_NAME = "ETH"; // Changeable per chain: "MATIC", "BNB", etc.
 
@@ -74,6 +86,39 @@ contract Disperser {
             );
             require(success, "Disperser: ERC20 transferFrom failed");
 
+            emit DispersedERC20(token, msg.sender, recipients[i], amount);
+        }
+    }
+
+    function disperseERC20WithPermit(
+        address token,
+        address[] calldata recipients,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant {
+        uint256 totalAmount = amount * recipients.length;
+
+        IERC20Permit(token).permit(
+            msg.sender,
+            address(this),
+            totalAmount,
+            deadline,
+            v,
+            r,
+            s
+        );
+
+        // Then do the disperse like before
+        for (uint i = 0; i < recipients.length; i++) {
+            bool success = IERC20(token).transferFrom(
+                msg.sender,
+                recipients[i],
+                amount
+            );
+            require(success, "Disperser: ERC20 transferFrom failed");
             emit DispersedERC20(token, msg.sender, recipients[i], amount);
         }
     }
