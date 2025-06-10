@@ -1,11 +1,14 @@
-import hre from "hardhat";
+import { ethers } from "hardhat";
 
 async function main() {
-  const Disperser = await hre.ethers.getContractFactory("Disperser");
+  const Disperser = await ethers.getContractFactory("Disperser");
   const disperser = await Disperser.deploy();
-  await disperser.deployed();
 
-  console.log("Deployed to:", disperser.address);
+  await disperser.waitForDeployment();
+  console.log("Disperser deployed to:", await disperser.getAddress());
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
