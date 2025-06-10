@@ -12,6 +12,8 @@ interface IERC20 {
         address owner,
         address spender
     ) external view returns (uint256);
+
+    function balanceOf(address account) external view returns (uint256);
 }
 
 interface IERC20Permit {
@@ -27,7 +29,7 @@ interface IERC20Permit {
 }
 
 contract Disperser {
-    string public constant NATIVE_TOKEN_NAME = "ETH"; // Changeable per chain: "MATIC", "BNB", etc.
+    string public constant NATIVE_TOKEN_NAME = "ETH";
 
     event DispersedETH(address indexed by, address indexed to, uint256 amount);
     event DispersedERC20(
@@ -46,31 +48,24 @@ contract Disperser {
     }
 
     function disperseETH(
-        address[] calldata recipients,
-        uint256 amount
+        address[] calldata recipients
     ) external payable nonReentrant {
-        require(recipients.length > 0, "Disperser: no recipients");
-        require(amount > 0, "Disperser: amount must be > 0");
-
-        uint256 total;
-        unchecked {
-            total = amount * recipients.length;
-        }
-
+        uint256 numRecipients = recipients.length;
+        require(numRecipients > 0, "Disperser: no recipients");
+        require(msg.value > 0, "Disperser: no ETH sent");
         require(
-            msg.value == total,
-            "Disperser: Disperse Amount and Sent amount are not equal"
+            msg.value % numRecipients == 0,
+            "Disperser: ETH not evenly divisible"
         );
 
-        for (uint i = 0; i < recipients.length; ) {
-            (bool success, ) = recipients[i].call{value: amount}("");
-            require(
-                success,
-                "Disperser: native token transfer to recipient failed"
+        uint256 amountPerRecipient = msg.value / numRecipients;
+
+        for (uint i = 0; i < numRecipients; ) {
+            (bool success, ) = recipients[i].call{value: amountPerRecipient}(
+                ""
             );
-
-            emit DispersedETH(msg.sender, recipients[i], amount);
-
+            require(success, "Disperser: native token transfer failed");
+            emit DispersedETH(msg.sender, recipients[i], amountPerRecipient);
             unchecked {
                 i++;
             }
@@ -79,30 +74,33 @@ contract Disperser {
 
     function disperseERC20(
         address token,
-        address[] calldata recipients,
-        uint256 amount
+        address[] calldata recipients
     ) external nonReentrant {
-        require(recipients.length > 0, "Disperser: no recipients");
-        require(amount > 0, "Disperser: amount must be > 0");
-        uint256 totalAmount;
-        unchecked {
-            totalAmount = amount * recipients.length;
-        }
+        uint256 numRecipients = recipients.length;
+        require(numRecipients > 0, "Disperser: no recipients");
+
+        uint256 allowance = IERC20(token).allowance(msg.sender, address(this));
+        require(allowance > 0, "Disperser: allowance is 0");
         require(
-            IERC20(token).allowance(msg.sender, address(this)) >= totalAmount,
-            "Disperser: insufficient allowance"
+            allowance % numRecipients == 0,
+            "Disperser: allowance not evenly divisible"
         );
 
-        for (uint i = 0; i < recipients.length; ) {
+        uint256 amountPerRecipient = allowance / numRecipients;
+
+        for (uint i = 0; i < numRecipients; ) {
             bool success = IERC20(token).transferFrom(
                 msg.sender,
                 recipients[i],
-                amount
+                amountPerRecipient
             );
-            require(success, "Disperser: ERC20 transferFrom failed");
-
-            emit DispersedERC20(token, msg.sender, recipients[i], amount);
-
+            require(success, "Disperser: ERC20 transfer failed");
+            emit DispersedERC20(
+                token,
+                msg.sender,
+                recipients[i],
+                amountPerRecipient
+            );
             unchecked {
                 i++;
             }
@@ -112,16 +110,23 @@ contract Disperser {
     function disperseERC20WithPermit(
         address token,
         address[] calldata recipients,
-        uint256 amount,
         uint256 deadline,
         uint8 v,
         bytes32 r,
         bytes32 s
     ) external nonReentrant {
-        uint256 totalAmount;
-        unchecked {
-            totalAmount = amount * recipients.length;
-        }
+        uint256 numRecipients = recipients.length;
+        require(numRecipients > 0, "Disperser: no recipients");
+
+        uint256 balance = IERC20(token).balanceOf(msg.sender);
+        require(balance > 0, "Disperser: balance is 0");
+        require(
+            balance % numRecipients == 0,
+            "Disperser: balance not evenly divisible"
+        );
+
+        uint256 totalAmount = balance;
+        uint256 amountPerRecipient = balance / numRecipients;
 
         IERC20Permit(token).permit(
             msg.sender,
@@ -133,21 +138,19 @@ contract Disperser {
             s
         );
 
-        require(
-            IERC20(token).allowance(msg.sender, address(this)) >= totalAmount,
-            "Disperser: insufficient allowance"
-        );
-
-        // Then do the disperse like before
-        for (uint i = 0; i < recipients.length; ) {
+        for (uint i = 0; i < numRecipients; ) {
             bool success = IERC20(token).transferFrom(
                 msg.sender,
                 recipients[i],
-                amount
+                amountPerRecipient
             );
-            require(success, "Disperser: ERC20 transferFrom failed");
-            emit DispersedERC20(token, msg.sender, recipients[i], amount);
-
+            require(success, "Disperser: ERC20 transfer failed");
+            emit DispersedERC20(
+                token,
+                msg.sender,
+                recipients[i],
+                amountPerRecipient
+            );
             unchecked {
                 i++;
             }
