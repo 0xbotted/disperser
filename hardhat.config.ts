@@ -7,9 +7,9 @@ const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.28",
     settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200,
+      metadata: {
+        bytecodeHash: "none", // disable ipfs
+        useLiteralContent: true, // use source code
       },
     },
   },
@@ -37,13 +37,21 @@ const config: HardhatUserConfig = {
       url: "https://testnet-rpc.monad.xyz",
       accounts: [CONFIG.PRIVATE_KEY],
     },
+    monadTestnet: {
+      url: "https://testnet-rpc.monad.xyz",
+      chainId: 10143,
+      accounts: [CONFIG.PRIVATE_KEY],
+    },
   },
   sourcify: {
     enabled: true,
     // apiUrl: "https://sourcify.parsec.finance", browserUrl: "https://purrsec.com" // uncomment for megaeth
+    apiUrl: "https://sourcify-api-monad.blockvision.org",
+    browserUrl: "https://testnet.monadexplorer.com", // uncomment for monad
   },
   etherscan: {
-    apiKey: CONFIG.ETHERSCAN_API_KEY,
+    enabled: false,
+    // apiKey: CONFIG.ETHERSCAN_API_KEY,
   },
 };
 
